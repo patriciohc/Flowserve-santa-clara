@@ -44,7 +44,7 @@ function login(req, res) {
 }
 
 function obtainUsers(req, res){
-    models.User.findAll({attributes:["id","name","userName","area","rolUser"]}).then(function(users) { 
+    models.User.findAll({attributes:["id","name","userName","area","rolUser"]}).then(function(users) {
         return res.status(200).send(users);
     });
 }
@@ -61,9 +61,53 @@ function getInfoUsers(req, res){
     })
 }
 
+function updateUsers(req, res){
+    if (req.rolUser != "admin")
+        return res.status(401).send({message: "usuario no autorizado"});
+
+    var id = req.body.idU;
+    var nombreCom = req.body.nameCompletoU;
+    var userUpd = req.body.userNomU;
+    var passw = req.body.passU;
+    var areaUpd  = req.body.areaUserU;
+    var rol = req.body.rolU;
+        models.User.findOne({
+            where: {id: id}
+        })
+        .then(function(user){
+            if(!user)return res.status(404).send({message: "Error al actualizar"});
+            if(passw != ""){
+                passw = sha1(passw);
+                user.password = passw;
+            }
+                user.name = nombreCom;
+                user.userName = userUpd;
+                user.area = areaUpd;
+                user.rolUser = rol;
+                user.save();
+                return res.status(200).send({user});
+    })
+}
+
+function deleteUser(req, res){
+    if (req.rolUser != "admin")
+        return res.status(401).send({message: "usuario no autorizado"});
+
+    var id = req.params.id;
+    models.User.destroy({ where: { id: id } })
+    .then( result => {
+        return res.status(200).send("success");
+    })
+    .catch( err => {
+        return res.status(505).send(err);
+    });
+}
+
 module.exports = {
     createUser,
     login,
     obtainUsers,
-    getInfoUsers
+    getInfoUsers,
+    updateUsers,
+    deleteUser
 };

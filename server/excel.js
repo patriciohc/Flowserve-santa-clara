@@ -2,7 +2,7 @@
 var excelInfo = {
     configRead: {
         colInitHead:  "A",
-        colEndHead: "F",
+        colEndHead: "Z",
         rowHead: 1
     }
 }

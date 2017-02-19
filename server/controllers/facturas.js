@@ -4,6 +4,7 @@
 const EIS = require("./EIS.js");
 // lectura de archivos de directorios y archivos de texto
 const fs = require('fs');
+const util = require('util');
 const iconvlite = require('iconv-lite');
 // lectura de excel
 const XLSX = require('xlsx');
@@ -15,29 +16,43 @@ const dirFacturasNacionales = "./timbradas";
 const dirFacturasTimbradas = "./timbradas";
 
 var io; // websockets
+var watch;
 
 // carga informacion del excel en formato json
 var jsonExcel = (function(){
-    var workbook = XLSX.readFile("./info_excel/Base_avance_para_IT.xlsx");
+    var workbook = XLSX.readFile("./info_excel/Copy_of_BACKLOG-EPO_002.xlsx");
     //return excel.readExcel(workbook);
     var sheets = excel.readExcel(workbook);
     return sheets[0];
 })();
 
-var txtPendientesParaProcesar = [];
+// determina si un txt tiene A1 en su nombre
+function Isprocessed(fileName) {
+    var isProsesada = fileName.split("_");
+    isProsesada = isProsesada[isProsesada.length-1];
+    if (isProsesada == "A1.txt")
+        return true;
+    else
+        return false;
+}
+
 /** esta a la eschucha de nuevos txt en el directorios de faturas */
-fs.watch(dirFacturas, {encoding: 'utf8'}, (eventType, filename) => {
+var txtPendientesParaProcesar = [];
+function callBackWatchFs(eventType, filename) {
+    if (Isprocessed(filename)) return;
     if (eventType == "rename") {
         if (fs.existsSync(dirFacturas + "/" +filename)) {
-            //console.log(lockFile.checkSync(dirFacturas + "/" +filename));
+            console.log("inicio-> " + filename);
             procesarTxt(filename, dirFacturas)
-            .then(function (){
-                var txt = getNumFacturasTxt(filename, dirFacturas)
+            .then(function (newFile) {
+                console.log("termino-> " + newFile);
+                var txt = getNumFacturasTxt(newFile, dirFacturas);
                 io.emit('newTxt', txt);
             })
             .catch(function (err) {
-                console.log("error: " + err.code);
-                txtPendientesParaProcesar.push(filename + "|" + "1");
+                if (err.code == 'EBUSY') {
+                    txtPendientesParaProcesar.push(filename + "|" + "1");
+                }
             });
         }
     } else {
@@ -51,22 +66,44 @@ fs.watch(dirFacturas, {encoding: 'utf8'}, (eventType, filename) => {
         } else if (stage == "2") {
             txtPendientesParaProcesar.splice( indexFile, 1 );
             if (fs.existsSync(dirFacturas + "/" +filename)) {
-                procesarTxt(filename, dirFacturas).then( function (){
-                    var txt = getNumFacturasTxt(filename, dirFacturas)
+                procesarTxt(filename, dirFacturas).then( function (newFile){
+                    console.log("termino-> " + newFile);
+                    var txt = getNumFacturasTxt(newFile, dirFacturas)
                     io.emit('newTxt', txt);
                 });
             }
         }
     }
-});
+}
 /** procesa los txt que se encuentran en el directorio */
-function procesarDirectorio(){
+function procesarDirectorio() {
     var list = fs.readdirSync(dirFacturas);
+    var arrayPromises = [];
     for (var i in list) {
-        procesarTxt(list[i], dirFacturas);
+        if (Isprocessed(list[i])) {
+            continue;
+        } else {
+            arrayPromises.push(procesarTxt(list[i], dirFacturas));
+        }
     }
+    return Promise.all(arrayPromises);
 };
-//(function(){procesarDirectorio()})();
+// procesar archivos txt en directorio de trabajo y pone a la escuha de nuevos txt
+(function() {
+    if (watch) {
+        watch.close();
+        watch = null;
+        txtPendientesParaProcesar = [];
+    }
+    procesarDirectorio().then(() => {
+        watch = fs.watch(dirFacturas, {encoding: 'utf8'}, callBackWatchFs);
+    }).catch(err => {
+        if (err.code == 'EISDIR')
+            watch = fs.watch(dirFacturas, {encoding: 'utf8'}, callBackWatchFs);
+        else
+            console.log(err);
+    });
+})();
 /**
 * separa en facturas nacionales y extranjeras, en las facturas extranjeras agrega
 * la informacion requerida, las facturas nacionales las guarda en un nuevo txt
@@ -76,27 +113,29 @@ function procesarDirectorio(){
 function procesarTxt(nameTxt, dir) {
     var factura = convertTxtToJson(dir + "/" + nameTxt);
     if (!factura) return new Promise((resolv) => resolv());
-    if (factura.code == 'EBUSY') {
-        return new Promise((resolv, reject) => reject(facturas));
+    if (factura.code) { // error
+        return new Promise((resolv, reject) => reject(factura));
     }
-    if (factura.ExReceptorLugarRecep.Pais == "MEXICO") {
-        var nombreNacionales = nameTxt.split(".")[0] + "_A1" + ".txt";
-        writeFile(factura, nombreNacionales, dirFacturasNacionales);
+    if (!factura.XXXINICIO.ExReceptorLugarRecep || !factura.XXXINICIO.ExReceptorLugarRecep.Pais){
+        console.log("no se encontro el pais o el formano no es valido");
+        return new Promise((resolv, reject) => resolv("formato valido"));
+    }
+    if (factura.XXXINICIO.ExReceptorLugarRecep.Pais == "MEXICO") {
+        writeFile(factura, nameTxt, dirFacturasNacionales);
         if (fs.existsSync(dirFacturas + "/" + nameTxt)) {
             fs.unlinkSync(dirFacturas + "/" + nameTxt);
         }
-        return new Promise((resolv) => resolv("delete file"));
+        return new Promise((resolv) => resolv("factura nacional"));
     } else {
         return new Promise( function (resolv, reject) {
-            addInfoFactura(factura).then( values => {
-                writeFile(factura, nameTxt, dirFacturas).then(() => {
-                    console.log("termino -> " + nameTxt);
-                    resolv("success");
-                });
-            }).catch( err => {
-                console.log(err);
-                reject(err);
-            });
+            var nombreExtranjeras = nameTxt.split(".")[0] + "_A1" + ".txt";
+            addInfoFactura(factura);
+            writeFile(factura, nombreExtranjeras, dirFacturas);
+            if (fs.existsSync(dirFacturas + "/" + nameTxt)) {
+                fs.unlinkSync(dirFacturas + "/" + nameTxt);
+            }
+            console.log("termino -> " + nameTxt);
+            resolv("success");
         });
     }
 }
@@ -107,16 +146,58 @@ function procesarTxt(nameTxt, dir) {
 * @return {Promise} promises
 */
 function addInfoFactura(factura) {
-    var promises = []
+    //var promises = []
     addSeccionManual(factura);
-    complementarInfoPrductos(factura.Detalle, promises)
-    return Promise.all(promises);
+    if (!factura.XXXINICIO.Detalle) {
+        return new Promise((resolv, reject) => resolv("formato no valido"));
+    }
+    complementarInfoPrductos(factura.XXXINICIO.Detalle);
+    //return Promise.all(promises);
 }
 /**
 * procesa el txt y regresa un json con las facturas que contiene
 * @param {string} nameFile - nombre completo de archivo
 */
 function convertTxtToJson(nameFile) {
+    var secctionToJson = function(texto) {
+        var bloques = texto.split("\r\n\r\n")
+        .map( item => {
+            var elementos = item.split("\r\n");
+            var dic = {};
+            for (var i = 0; i < elementos.length; i++) {
+                var item = elementos[i].trim();
+                if (item == "") continue;
+                var key = item.split(" ")[0];
+                var value = item.substring(key.length, item.length).trim();
+                if (value == "Detalle") {
+                    i++;
+                    var infoHead = procesarHead(elementos[i].trim());
+                    var rows = [];
+                    while(++i < elementos.length)
+                        rows.push(procesarRow(elementos[i], infoHead));
+                    dic.Detalle =  { head: infoHead, rows: rows } ;
+                } else {
+                    dic[key] = value;
+                }
+            }
+            return dic;
+        });
+
+        var seccionProcesada = {};
+        for (var i in bloques) {
+            var bloque = bloques[i];
+            var seccion = bloque["================"];
+            if (seccion) {
+                seccionProcesada[seccion] = bloque;
+            } else {
+                if (bloque.Detalle) {
+                    seccionProcesada.Detalle = bloque.Detalle;
+                }
+            }
+        }
+        return seccionProcesada;
+    };
+
     if(!fs.existsSync(nameFile)) return [];
     try {
         var texto = fs.readFileSync(nameFile);
@@ -125,47 +206,18 @@ function convertTxtToJson(nameFile) {
         return err;
     }
     if (!texto) return [];
-    //var facturas = texto.split("XXXINICIO");
-    //facturas = facturas.filter(item => item != item.trim());
-    //facturas = facturas.map( item => {
 
-    //    return item.split("\r\n\r\n")
-    var bloques = texto.split("\r\n\r\n")
-    .map( item => {
-        var elementos = item.split("\r\n");
-        var dic = {};
-        for (var i = 0; i < elementos.length; i++) {
-            var item = elementos[i].trim();
-            if (item == "") continue;
-            var key = item.split(" ")[0];
-            var value = item.substring(key.length, item.length).trim();
-            if (value == "Detalle") {
-                i++;
-                var infoHead = procesarHead(elementos[i].trim());
-                var rows = [];
-                while(++i < elementos.length)
-                    rows.push(procesarRow(elementos[i], infoHead));
-                dic.Detalle =  { head: infoHead, rows: rows } ;
-            } else {
-                dic[key] = value;
-            }
-        }
-        return dic;
-    });
-
-    var facturaProcesada = {};
-    for (var i in bloques) {
-        var bloque = bloques[i];
-        var seccion = bloque["================"];
-        if (seccion) {
-            facturaProcesada[seccion] = bloque;
-        } else {
-            if (bloque.Detalle) {
-                facturaProcesada.Detalle = bloque.Detalle;
-            }
-        }
+    var facturas = texto.split("XXXINICIO");
+    facturas = facturas.filter(item => item.trim() != "");
+    var secciones = facturas[0].split("XXXFINDETA");
+    if (secciones.length != 2) { // estructura no valida
+        return {code: 'no valid'};
     }
-    return facturaProcesada;
+    var factura = {
+         XXXINICIO: secctionToJson(secciones[0]),
+         XXXFINDETA: secctionToJson(secciones[1]),
+    }
+    return factura;
 }
 /**
 * agrega las claves para la informacion que se agregara manualmente
@@ -182,8 +234,8 @@ function addSeccionManual(factura){
         cceClavePed: "A1",
     }
     // busca si ya fueron agregados los nuevos datos
-    if (!factura.cce)
-        factura.cce = nuevosDatos;
+    if (!factura.XXXINICIO.cce)
+        factura.XXXINICIO.cce = nuevosDatos;
 }
 /**
 * dentro de cada factura hay un aparatado donde se encuetran los productos con
@@ -241,41 +293,44 @@ function writeFile(factura, nombreTxt, directorio) {
         return new Promise( (resolve, reject) => resolve("noData"));
     }
     var seccionToTxt = function (seccion) {
+        var texto = "";
         for (var key in seccion) {
             var value = seccion[key];
             texto += key
                 + white.substring(0, 17 - key.length)
                 + seccion[key] + "\r\n";
         }
-        texto += "\r\n";
+        return texto += "\r\n";
     }
-    texto += "\r\n";
-    for(var keySeccion in factura) {
-        var seccion = factura[keySeccion];
-        switch (keySeccion) {
-            case "Totales":
-                texto += "\r\n\r\n\r\n";
-                seccionToTxt(seccion);
-                break;
-            case "Detalle":
-                texto += "================"
-                    + white.substring(0, 17 - "================".length)
-                    + "Detalle" + "\r\n";
-                texto += convertProductosJsonToTxt(seccion);
-                break;
-            default:
-                seccionToTxt(seccion);
+    var mainSeccionToTxt = function (seccion) {
+        var texto = "";
+        for(var key in seccion) {
+            var subSeccion = seccion[key];
+            switch (key) {
+                case "Totales":
+                    //texto += "\r\n\r\n\r\n";
+                    texto += seccionToTxt(subSeccion);
+                    break;
+                case "Detalle":
+                    texto += "================"
+                        + white.substring(0, 17 - "================".length)
+                        + "Detalle" + "\r\n";
+                    texto += convertProductosJsonToTxt(subSeccion) + "\r\n";
+                    break;
+                default:
+                    texto += seccionToTxt(subSeccion);
+            }
         }
-        //if (keySeccion == "otros") texto = texto.substring(0, texto.length - 2);
+        return texto;
     }
-    return new Promise( (resolve, reject) => {
-        texto = iconvlite.encode(texto, ' ISO-8859-1');
-        fs.writeFile( directorio + "/" + nombreTxt, texto, (err) => {
-            if (err) reject(err);
-            resolve("success");
-        });
-    });
 
+    texto += "\r\nXXXINICIO\r\n";
+    texto += mainSeccionToTxt(factura.XXXINICIO);
+    texto += "\r\n\r\nXXXFINDETA\r\n";
+    texto += mainSeccionToTxt(factura.XXXFINDETA);
+
+    texto = iconvlite.encode(texto, ' ISO-8859-1');
+    fs.writeFileSync(directorio + "/" + nombreTxt, texto);
 }
 /**
 * convierte lo productos que se encuentran en formato json a texto para ser escritos
@@ -317,9 +372,9 @@ function complementarInfoPrducto(producto, head) {
 
     var codigo = producto.VlrCodigo
 
-    var infoExcel = jsonExcel.data.find(elemento => elemento.RPRDNO == codigo)
+    var infoExcel = jsonExcel.data.find(elemento => elemento.ODV_Num.trim() == codigo.trim())
     || { DESCRIPCION_EN_ESPAnOL: "", DESCRIPCION_EN_INGLES: "", FRACCION: "" };
-    var match = {cceDescES: "DESCRIPCION_EN_ESPAnOL", cceDescEN: "DESCRIPCION_EN_INGLES", cceFraccion: "FRACCION"};
+    var match = {cceDescES: "Descripcion_Espanol", cceFraccion: "FRACCION_ARANCELARIA"};
     var comentarios;
     var checkItemExcel = function(key, esPirmero) {
         var tmp = head.find( item => item.nombre == key );
@@ -343,7 +398,7 @@ function complementarInfoPrducto(producto, head) {
     }
     // datos excel
     checkItemExcel("cceDescES", true);// descripcion español
-    checkItemExcel("cceDescEN");// descripcion ingles
+    //checkItemExcel("cceDescEN");// descripcion ingles
     checkItemExcel("cceFraccion");// fraccion
     // campos vacios
     checkItemVacio("cceMarca");
@@ -359,48 +414,38 @@ function complementarInfoPrducto(producto, head) {
 * @param {Array} arrayPromises - debido a que se ejecutan consultas sqlServer
 * asincronas, es necesario para determinar el momento en que se han ejecutado todas
 */
-function complementarInfoPrductos(productos, arrayPromises){
-    for (var i in productos.rows){
+function complementarInfoPrductos(productos){
+    for (var i in productos.rows) {
         var p = productos.rows[i];
         complementarInfoPrducto(p, productos.head);
-        var promise = EIS.getDatos(p.VlrCodigo1).then(function(datos){
-            p.cceMarca = datos.marca;
-            p.cceModelo = datos.modelo;
-        });
-        arrayPromises.push(promise);
+        //var promise = EIS.getDatos(p.VlrCodigo1).then(function(datos){
+        //    p.cceMarca = datos.marca;
+        //    p.cceModelo = datos.modelo;
+        //});
+        //arrayPromises.push(promise);
+    }
+}
+
+// comprueba si el nombre de archivo es valido
+function testNameTxt(nameTxt) {
+    var partsTxt = nameTxt.split("_");
+    if (partsTxt.length != 3 && partsTxt.length != 4) {
+        return false;
+    } else {
+        return true;
     }
 }
 
 /**
-* @param {string} nameTxt - nombre del txt
-* @param {string} dir - directorio
-* @return nombre y numero de facturas contenidas en el archivo
+* regresa las facturas en el txt
 */
-function getNumFacturasTxt(nameFile, dir) {
-    var archivo = {};
-    var nameFileCompleto =  dir +"/"+ nameFile;
-    var texto = fs.readFileSync(nameFileCompleto, 'utf8');
-    archivo.nombre = nameFile;
-    archivo.cantidad = texto.split("XXXINICIO").filter(item => item != item.trim()).length;
-    return archivo;
-}
+function getFacturas(req, res) {
+    console.log("getFacturas");
+    var itemXPage = parseInt(req.query.imteXPage);
+    var page = parseInt(req.query.page);
+    if (isNaN(itemXPage) || isNaN(page))
+        return res.status(404).send({message: "datos no validos"});
 
-//////// funciones en escucha de peticiones http ///////
-
-/**
-* obtiene una lista de txt en el directorio
-* @param {string} directorio - pendientes, timbradas
-* @return lista de archivos txt en el directorio { nombre, cantidad: cantidad de facturas }
-*/
-function getListTxt(req, res) {
-    var nameTxtToDate = function (nameTxt){
-        var fechaArchivo = nameTxt.split(".")[0];
-        fechaArchivo = fechaArchivo.split("_");
-        fechaArchivo = fechaArchivo[fechaArchivo.length-1];
-        fechaArchivo = new Date(fechaArchivo);
-        if (fechaArchivo == "Invalid Date") return null;
-        else return fechaArchivo;
-    };
     var dir = "";
     if (req.query.directorio == "pendientes")
         dir = dirFacturas;
@@ -409,64 +454,90 @@ function getListTxt(req, res) {
     else
         return res.status(404).send({message:"directorio no valido"});
 
-    var fIni, fFin;
-    if (req.query.fIni) {
-        fIni = new Date(req.query.fIni);
-    } else {
-        fIni = new Date("2015-01-01");
-        //fIni.setDate(1);
-    }
-    if (req.query.fFin) {
-        fFin = new Date(req.query.fFin);
-    } else {
-        fFin = new Date("2020-01-01");
-        //fFins.setDate(30);
+    var list = fs.readdirSync(dirFacturas);
+    var listStat = [];
+    for (var i = 0; i < list.length; i++) {
+
+        if (!testNameTxt(list[i])) continue;
+
+        var stat = fs.statSync(dirFacturas + "/" + list[i]);
+        if (!stat.isFile()) continue;
+        var info = util.inspect(stat);
+        listStat.push({
+            nameTxt: list[i],
+            birthtime: info.birthtime,
+        });
     }
 
-    fs.readdir(dir, (err, files) => {
-        if (err) {
-            console.log(err);
-            return res.status(500).send(err);
-        }
-        var lista = [];
-        for (var i in files) {
-            var archivo = {};
-            var fechaArchivo = nameTxtToDate(files[i]);
-            if (!fechaArchivo) continue;
-            if (fIni.getTime() <= fechaArchivo.getTime() &&  fechaArchivo.getTime() <= fFin.getTime() ) {
-                var archivo = getNumFacturasTxt(files[i], dir)
-                lista.push(archivo);
-            }
-        }
-        return res.status(200).send(lista);
+    if (itemXPage*page > listStat.length)
+        return res.status(200).send([]);
+
+    listStat.sort((a,b) => {
+        if (a.birthtime.getTime() < a.birthtime.getTime() ) return -1;
+        else if (a.birthtime.getTime() > a.birthtime.getTime() ) return 1;
+        else return 0;
     });
+
+    var facturas = [];
+    var inicio = itemXPage*page;
+    for (var i = inicio; i < listStat.length; i++) {
+        if (Isprocessed(listStat[i].nameTxt)) {
+            var factura = convertTxtToJson(dir + "/" + listStat[i].nameTxt);
+            if (!factura || factura.code || factura.length == 0) continue;
+            facturas.push({
+                nameTxt: listStat[i].nameTxt,
+                data: factura
+            });
+        }
+    }
+
+    res.status(200).send(facturas);
 }
 /**
 * regresa las facturas en el txt
 */
-function getFacturas(req, res) {
-    console.log("getFacturas");
-    var nameFile = dirFacturas + "/" + req.body.nameFile;
-    var facturas = convertTxtToJson(nameFile);
-    res.status(200).send(facturas);
+function reProcesarTxt(req, res) {
+    console.log("reProcesarTxt");
+    jsonExcel = cargaDeExcel();
+    if (watch) {
+        watch.close();
+        watch = null;
+        txtPendientesParaProcesar = [];
+    }
+    var list = fs.readdirSync(dirFacturas);
+    var arrayPromises = [];
+    for (var i in list) {
+        if (!Isprocessed(list[i])) {
+            continue;
+        } else {
+            var tmp = list[i].split(".")[0];
+            tmp = tmp.split("_");
+            tmp.splice(tmp.length-1, 1);
+            var name = tmp.join("_") + ".txt";
+            fs.renameSync(dirFacturas + "/" + list[i], dirFacturas + "/" + name);
+        }
+    }
+
+    procesarDirectorio().then(() => {
+        watch = fs.watch(dirFacturas, {encoding: 'utf8'}, callBackWatchFs);
+        return res.status(200).send({message: "success"});
+    }).catch(err => {
+        console.log(err);
+        return res.status(500).send(err);
+    });
 }
 /**
 * guardas las facturas en el txt
 */
 function guardarTxt(req, res){
-    var facturas = req.body.facturas;
+    var facturas = req.body.data;
     var nameTxt = req.body.nameTxt;
     console.log("Guardar -> " + nameTxt);
     if (!facturas)
         res.status(200).send({message: "no hay facturas por guardar"});
 
     writeFile(facturas, nameTxt, dirFacturas)
-    .then( () => {
-        res.status(200).send({message: "success"});
-    })
-    .catch( err => {
-        res.status(500).send({error: err});
-    });
+    res.status(200).send({message: "success"});
 }
 /**
 * turnar
@@ -505,12 +576,12 @@ function setSocketIO (socketIO) {
 }
 
 module.exports = {
-        getListTxt,
         reEditar,
         getFacturas,
         guardarTxt,
         timbrar,
         //tmp
         procesarCarpeta,
-        setSocketIO
+        setSocketIO,
+        reProcesarTxt
 }

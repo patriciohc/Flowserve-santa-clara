@@ -629,7 +629,7 @@ function timbrar() {
     })
     .then(function (result) {
         alertSucces();
-        cargarFacturas();
+        updateTablaTxt();
     })
     .catch(function (err) {
         errorAlert();

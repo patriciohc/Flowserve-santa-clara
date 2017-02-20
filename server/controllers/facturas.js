@@ -1,7 +1,7 @@
 'use strict'
 
 // consulta base de datos sqlServer
-const EIS = require("./EIS.js");
+//const EIS = require("./EIS.js");
 // lectura de archivos de directorios y archivos de texto
 const fs = require('fs');
 const iconvlite = require('iconv-lite');

@@ -69,12 +69,34 @@
                 <div class="col-md-12">
                     <div id="panelTablaFacturas" class="panel panel-primary">
                         <div class="panel-heading">
-                            <h3 class="panel-title">Facturas de archivo txt.</h3>
+                            <h3 class="panel-title">Lista de facturas pendientes</h3>
                         </div>
-                        <div class="panel-body" >
+                        <div class="panel-body" style="font-size:16px;">
                             <div style="height:40px;">
-                                <div style="margin-top: 10px; display:inline-block;">
+                                <!-- <div style="margin-top: 10px; display:inline-block;">
                                     <p>Selecciona la factura a modificar:</p>
+                                </div> -->
+                                <label for="selectElementosXPage">Elementos por paginá</label>
+                                <select  id="selectElementosXPage" onchange="updateTablaTxt()">
+                                    <option value="5">5</option>
+                                    <option value="10">20</option>
+                                    <option value="30">30</option>
+                                    <option value="40">40</option>
+                                    <option value="50">50</option>
+                                </select>
+                                <span>
+                                    Paginá actual
+                                    <strong id="labelNoPage">1</strong>
+                                </span>
+                                <div class="btn-group">
+                                    <button type="button" onclick="btnAtrasFactura()" class="btn btn-primary" >
+                                        <span class="glyphicon glyphicon-arrow-left"></span>
+
+                                    </button>
+                                    <button type="button" onclick="btnAdelanteFactura()" class="btn btn-primary">
+
+                                        <span class="glyphicon glyphicon-arrow-right"></span>
+                                    </button>
                                 </div>
                             </div>
                             <div id="divTablaFacturas" style="overflow: scroll;">

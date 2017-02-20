@@ -1,8 +1,8 @@
 // cotiene los datos del txt seleccionado de las lista de archivos pendientes
 var listaTxt = {
-    //nameTxt: null, // nombre del txt
+    nameTxt: null, // nombre del txt
     facturas: null, // facturas en json
-    indexSelected: null, // factura seleccionada
+    //indexSelected: null, // factura seleccionada
 };
 // informacion de los usuario actualmente registrados
 var usuariosRegistrados;
@@ -29,7 +29,7 @@ $(document).ready(function() {
         $("body").css("background", "#F4F2F0");
         document.getElementById("idloguin").style.display = "none";
         document.getElementById("divPrincipal").style.display = "block";
-        cargarFacturas();
+        cargarFacturas(0, 5);
     }
     $( "#loguinbtn" ).click(function() {
         logueo();
@@ -116,7 +116,7 @@ $(document).ready(function() {
         onchangeDate();
     });
 
-    var urlServer = "http://localhost:8880";
+    var urlServer = "http://localhost:8888";
     var socket = io.connect( urlServer, {"forceNew": true});
     socket.on('newTxt', agregarElementoListaTxt);
 
@@ -176,20 +176,80 @@ function logueo() {
    }
 }
 
+// envento en boton atras historial
+function btnAtrasFacturaHistorial() {
+    var pagina = parseInt($("#labelNoPageHistorial").html());
+    var elementosXPagina = parseInt($("#selectElementosXPageHistorial").val());
+    if (pagina <= 1){
+        return;
+    }
+    pagina--;
+    $("#labelNoPage").html(pagina);
+    cargarFacturas(pagina-1, elementosXPagina);
+}
+// envento en boton adelante historial
+function btnAdelanteFacturaHistorial() {
+    var pagina = parseInt($("#labelNoPageHistorial").html());
+    var elementosXPagina = parseInt($("#selectElementosXPageHistorial").val());
+    pagina++;
+    $("#labelNoPageHistorial").html(pagina);
+    cargarFacturas(pagina-1, elementosXPagina);
+}
+
+// envento en boton atras
+function btnAtrasFactura() {
+    var pagina = parseInt($("#labelNoPage").html());
+    if (pagina <= 1){
+        return;
+    }
+    pagina--;
+    $("#labelNoPage").html(pagina);
+    updateTablaTxt();
+}
+// envento en boton adelante
+function btnAdelanteFactura() {
+    var pagina = parseInt($("#labelNoPage").html());
+    pagina++;
+    $("#labelNoPage").html(pagina);
+    updateTablaTxt();
+}
+// actualiza datos en tabla
+function updateTablaTxt(){
+    var pagina = parseInt($("#labelNoPage").html());
+    var elementosXPagina = parseInt($("#selectElementosXPage").val());
+    cargarFacturas(pagina-1, elementosXPagina);
+}
 // agrega un nuevo elemento a la lista de txt
-function agregarElementoListaTxt(txt) {
-        var tableTxt = document.getElementById("ul-txt");
-        var li = document.createElement("li")
-        li.className="list-group-item item-list-txt";
-        li.id = txt.nombre;
-        li.style.cursor = "pointer";
-        //li.style.height = "50px";
-        li.onclick = onClickCargarFacturas;
-        li.innerHTML = `<span>${txt.nombre}</span><span class='badge' id='badge_${txt.nombre}'>${txt.cantidad}</span>`;
-        tableTxt.appendChild(li);
+function agregarElementoListaTxt(datos) {
+    listaTxt.facturas[datos.nameTxt] = datos.factura;
+    var factura = datos.factura;
+    //var factura = listaTxt.facturas[key];
+    var tr = document.createElement("tr");
+    //tr.className = getClassRow(result[i]);
+    tr.style.cursor = "pointer";
+    tr.onclick = formularioData;
+    tr.keyData = datos.nameTxt;
+
+    var td = document.createElement("td");
+    td.innerHTML = datos.nameTxt;
+    tr.appendChild(td);
+
+    td = document.createElement("td");
+    td.innerHTML = factura.XXXINICIO.IdDoc.Serie;
+    tr.appendChild(td);
+
+    td = document.createElement("td");
+    td.innerHTML=factura.XXXINICIO.IdDoc.Folio;
+    tr.appendChild(td);
+
+    td = document.createElement("td");
+    td.innerHTML=factura.XXXINICIO.IdDoc.FechaEmis;
+    tr.appendChild(td);
+
+    $("#idtbodyfac").prepend(tr);
 }
 //funcion encargada de obtener txt a cargar en la lista de archivo pendientes
-function cargarFacturas() {
+function cargarFacturas(page, itemXPage) {
     hideForms();
     // var getClassRow = function(factura) {
     //     var datosFaltantes = validarFactura(factura);
@@ -201,40 +261,14 @@ function cargarFacturas() {
     //         return "bg-danger";
     //     }
     // }
-    General.get("/api/facturas?directorio=pendientes&page=0&imteXPage=10")
-    .then(function(result){
-        var cuerpoTableFacturas = document.getElementById("idtbodyfac");
-        cuerpoTableFacturas.innerHTML = "";
-        if (result && result.length > 0) {
+    General.get(`/api/facturas?directorio=pendientes&page=${page}&imteXPage=${itemXPage}`)
+    .then(function(result) {
+        if (result) {
             listaTxt.facturas = result;
-            for (i=0; i<result.length;i++) {
-                var tr = document.createElement("tr");
-                //tr.className = getClassRow(result[i]);
-                tr.style.cursor = "pointer";
-                tr.onclick = formularioData;
-                tr.IndexData = i;
-
-                var td = document.createElement("td");
-                td.innerHTML=result[i].nameTxt;
-                tr.appendChild(td);
-
-                td = document.createElement("td");
-                td.innerHTML=result[i].data.XXXINICIO.IdDoc.Serie;
-                tr.appendChild(td);
-
-                td = document.createElement("td");
-                td.innerHTML=result[i].data.XXXINICIO.IdDoc.Folio;
-                tr.appendChild(td);
-
-                td = document.createElement("td");
-                td.innerHTML=result[i].data.XXXINICIO.IdDoc.FechaEmis;
-                tr.appendChild(td);
-                cuerpoTableFacturas.appendChild(tr);
-            }
-
+            llenarTablaTxt();
         } else {
             $.alert({
-                title: 'Alerta!',
+                title: '¡Alerta!',
                 content: 'No hay archivos pendientes.!',
             });
         }
@@ -243,6 +277,36 @@ function cargarFacturas() {
         console.log(err);
         errorAlert();
     });
+}
+
+function llenarTablaTxt() {
+    var cuerpoTableFacturas = document.getElementById("idtbodyfac");
+    cuerpoTableFacturas.innerHTML = "";
+    for (var key in listaTxt.facturas) {
+        var factura = listaTxt.facturas[key];
+        var tr = document.createElement("tr");
+        //tr.className = getClassRow(result[i]);
+        tr.style.cursor = "pointer";
+        tr.onclick = formularioData;
+        tr.keyData = key;
+
+        var td = document.createElement("td");
+        td.innerHTML = key;
+        tr.appendChild(td);
+
+        td = document.createElement("td");
+        td.innerHTML=factura.XXXINICIO.IdDoc.Serie;
+        tr.appendChild(td);
+
+        td = document.createElement("td");
+        td.innerHTML=factura.XXXINICIO.IdDoc.Folio;
+        tr.appendChild(td);
+
+        td = document.createElement("td");
+        td.innerHTML=factura.XXXINICIO.IdDoc.FechaEmis;
+        tr.appendChild(td);
+        cuerpoTableFacturas.appendChild(tr);
+    }
 }
 
 //funcion que carga las facturas del txt elegido en la tabla
@@ -304,8 +368,8 @@ function validarFactura(factura) {
 
 //mostrar formularios
 function formularioData(){
-    listaTxt.indexSelected = this.IndexData
-    var datos = listaTxt.facturas[listaTxt.indexSelected].data.XXXINICIO;
+    listaTxt.nameTxt = this.keyData;
+    var datos = listaTxt.facturas[listaTxt.nameTxt].XXXINICIO;
     // datos encabezado
     $("#txtEncNumInter").val(datos.IdDoc.NumeroInterno);
     $("#txtEncNumApro").val(datos.IdDoc.NroAprob);
@@ -425,7 +489,7 @@ function formularioData(){
 
 // toma los datos de las cajas de texto y los asigna al json de facturas correspondiente
 function setDatosFactura(){
-    var datos = listaTxt.facturas[listaTxt.indexSelected].data.XXXINICIO;
+    var datos = listaTxt.facturas[listaTxt.nameTxt].XXXINICIO;
     // datos encabezado
     datos.IdDoc.NumeroInterno = $("#txtEncNumInter").val()
     datos.IdDoc.NroAprob = $("#txtEncNumApro").val()
@@ -535,12 +599,12 @@ function setDatosFactura(){
 
 function guardarTxt() {
     setDatosFactura();
-    var factura = listaTxt.facturas[listaTxt.indexSelected];
+    var factura = listaTxt.facturas[listaTxt.nameTxt];
     if (!factura) {
         console.log("selecciones una fatura");
         return;
     }
-    General.put("/api/facturas", factura)
+    General.put("/api/facturas", {factura: factura, nameTxt: listaTxt.nameTxt })
     .then(function (result) {
         cargarFacturas();
         alertSucces();
@@ -554,14 +618,14 @@ function guardarTxt() {
 
 function timbrar() {
     setDatosFactura();
-    var factura = listaTxt.facturas[listaTxt.indexSelected];
+    var factura = listaTxt.facturas[listaTxt.nameTxt];
     if (!factura) {
         console.log("selecciones una fatura");
         return;
     }
-    General.put("/api/facturas", factura)
+    General.put("/api/facturas", {factura:factura, nameTxt: listaTxt.nameTxt})
     .then(function (result) {
-        return General.post("/api/timbrarFactura", {nameTxt: factura.nameTxt});
+        return General.post("/api/timbrarFactura", {nameTxt: listaTxt.nameTxt});
     })
     .then(function (result) {
         alertSucces();
@@ -667,42 +731,37 @@ function swichForms(){
 }
 
 function onClickHistorial(){
-    initFechasBusquedaHistorial();
-    onchangeDate();
+    //initFechasBusquedaHistorial();
+    consultarHistorial();
 }
 
-function initFechasBusquedaHistorial(){
-    var toDay = new Date();
-    var fIni = "01-01-" +(toDay.getFullYear() - 1)
-    var fFin = toDay.getDate() + "-" + (toDay.getMonth() + 1) + "-" + toDay.getFullYear()
-    $("#from").val(fIni);
-    $("#to").val(fFin);
-}
+// function initFechasBusquedaHistorial(){
+//     var toDay = new Date();
+//     var fIni = "01-01-" +(toDay.getFullYear() - 1)
+//     var fFin = toDay.getDate() + "-" + (toDay.getMonth() + 1) + "-" + toDay.getFullYear()
+//     $("#from").val(fIni);
+//     $("#to").val(fFin);
+// }
 
-function onchangeDate() {
-    var fIni = $("#from").val().split("-");
-    var fFin = $("#to").val().split("-");
-    fIni = `${fIni[2]}-${fIni[1]}-${fIni[0]}`
-    fFin = `${fFin[2]}-${fFin[1]}-${fFin[0]}`
+function consultarHistorial() {
     var tbHistorial = document.getElementById("tbHistorial");
     tbHistorial.innerHTML = "";
-    General.get(`/api/listText?directorio=timbradas&fIni=${fIni}&fFin=${fFin}`)
+    General.get(`/api/facturas?directorio=timbradas&page=0&imteXPage=10`)
     .then(function (result) {
-        if (!result || result.length == 0){
+        if (!result || result.length == 0) {
             alertMensaje("No hay facturas timbradas en el rango seleccionado");
             return;
         }
-        for (var i in result) {
+        for (var key in result) {
             var tr = document.createElement("tr");
-            tr.id = "tablaHistorial_" + result[i].nombre;
+            tr.id = "tablaHistorial_" + key;
             var td = document.createElement("td");
-            td.innerHTML = result[i].nombre;
+            td.innerHTML = key;
             tr.appendChild(td);
             td = document.createElement("td");
-            td.innerHTML = `<input type='checkbox' value=${result[i].nombre} class='checkRestaurar'></input>`;
+            td.innerHTML = `<input type='checkbox' value=${key} class='checkRestaurar'></input>`;
             tr.appendChild(td);
             tbHistorial.appendChild(tr);
-
         }
     }).catch(function(err){
         console.log(err);
@@ -712,7 +771,7 @@ function onchangeDate() {
 function restaurarTxt(){
     var checks = [];
     $(".checkRestaurar").each( function (index){
-        if($(this).is(":checked")){
+        if($(this).is(":checked")) {
             checks.push($(this).val());
         }
     });

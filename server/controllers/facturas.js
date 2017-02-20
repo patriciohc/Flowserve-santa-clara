@@ -4,7 +4,6 @@
 const EIS = require("./EIS.js");
 // lectura de archivos de directorios y archivos de texto
 const fs = require('fs');
-const util = require('util');
 const iconvlite = require('iconv-lite');
 // lectura de excel
 const XLSX = require('xlsx');
@@ -39,15 +38,15 @@ function Isprocessed(fileName) {
 /** esta a la eschucha de nuevos txt en el directorios de faturas */
 var txtPendientesParaProcesar = [];
 function callBackWatchFs(eventType, filename) {
-    if (Isprocessed(filename)) return;
+    if (Isprocessed(filename) || !testNameTxt(filename)) return;
     if (eventType == "rename") {
         if (fs.existsSync(dirFacturas + "/" +filename)) {
             console.log("inicio-> " + filename);
             procesarTxt(filename, dirFacturas)
             .then(function (newFile) {
                 console.log("termino-> " + newFile);
-                var txt = getNumFacturasTxt(newFile, dirFacturas);
-                io.emit('newTxt', txt);
+                var factura = convertTxtToJson(dirFacturas + "/" + newFile);
+                io.emit('newTxt', {nameTxt: newFile, factura});
             })
             .catch(function (err) {
                 if (err.code == 'EBUSY') {
@@ -68,8 +67,8 @@ function callBackWatchFs(eventType, filename) {
             if (fs.existsSync(dirFacturas + "/" +filename)) {
                 procesarTxt(filename, dirFacturas).then( function (newFile){
                     console.log("termino-> " + newFile);
-                    var txt = getNumFacturasTxt(newFile, dirFacturas)
-                    io.emit('newTxt', txt);
+                    var factura = convertTxtToJson(dirFacturas + "/" + newFile);
+                    io.emit('newTxt', {nameTxt: newFile, factura});
                 });
             }
         }
@@ -454,40 +453,35 @@ function getFacturas(req, res) {
     else
         return res.status(404).send({message:"directorio no valido"});
 
-    var list = fs.readdirSync(dirFacturas);
+    var list = fs.readdirSync(dir);
     var listStat = [];
+    console.log(list);
     for (var i = 0; i < list.length; i++) {
-
         if (!testNameTxt(list[i])) continue;
-
-        var stat = fs.statSync(dirFacturas + "/" + list[i]);
+        var stat = fs.statSync(dir + "/" + list[i]);
         if (!stat.isFile()) continue;
-        var info = util.inspect(stat);
+        //var infoFile = util.inspect(stat);
         listStat.push({
             nameTxt: list[i],
-            birthtime: info.birthtime,
+            birthtime: stat.birthtime,
         });
     }
 
     if (itemXPage*page > listStat.length)
         return res.status(200).send([]);
-
     listStat.sort((a,b) => {
         if (a.birthtime.getTime() < a.birthtime.getTime() ) return -1;
         else if (a.birthtime.getTime() > a.birthtime.getTime() ) return 1;
         else return 0;
     });
 
-    var facturas = [];
+    var facturas = {};
     var inicio = itemXPage*page;
-    for (var i = inicio; i < listStat.length; i++) {
+    for (var i = inicio; i < listStat.length && i < inicio + itemXPage ; i++) {
         if (Isprocessed(listStat[i].nameTxt)) {
             var factura = convertTxtToJson(dir + "/" + listStat[i].nameTxt);
             if (!factura || factura.code || factura.length == 0) continue;
-            facturas.push({
-                nameTxt: listStat[i].nameTxt,
-                data: factura
-            });
+            facturas[listStat[i].nameTxt] = factura;
         }
     }
 
@@ -529,14 +523,14 @@ function reProcesarTxt(req, res) {
 /**
 * guardas las facturas en el txt
 */
-function guardarTxt(req, res){
-    var facturas = req.body.data;
+function guardarTxt(req, res) {
+    var factura = req.body.factura;
     var nameTxt = req.body.nameTxt;
     console.log("Guardar -> " + nameTxt);
-    if (!facturas)
+    if (!factura)
         res.status(200).send({message: "no hay facturas por guardar"});
 
-    writeFile(facturas, nameTxt, dirFacturas)
+    writeFile(factura, nameTxt, dirFacturas)
     res.status(200).send({message: "success"});
 }
 /**
@@ -561,6 +555,8 @@ function reEditar(req, res) {
         if(fs.existsSync(nameTxt)){
             console.log("nameTxt -> " + nameTxt);
             fs.renameSync(nameTxt, dirFacturas + "/" + nameTxts[i]);
+            var factura = convertTxtToJson(dirFacturas + "/" + nameTxts[i]);
+            io.emit('newTxt', {nameTxt: nameTxts[i], factura});
         }
     }
     return res.status(200).send({message:"success"});

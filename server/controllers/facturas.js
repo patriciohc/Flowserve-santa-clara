@@ -234,6 +234,7 @@ function addSeccionManual(factura){
         cceVersion: "1.1",
         cceTipoOp: "Exportacion",
         cceClavePed: "A1",
+        cceMTraslado: "",
     }
     // busca si ya fueron agregados los nuevos datos
     if (!factura.XXXINICIO.cce)

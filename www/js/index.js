@@ -472,7 +472,7 @@ function formularioData(){
     $("#txt_cceNExpConfiable").val(datos.cce.cceNExpConfiable);
     $("#txt_cceCertOrig").val(datos.cce.cceCertOrig);
     $("#txt_cceNCertOrig").val(datos.cce.cceNCertOrig);
-
+    $("#selectCceMTraslado").val(datos.cce.cceMTraslado);
     // datos productos
     var productos = datos.Detalle;
     var tb = document.getElementById("tbSku");
@@ -592,6 +592,7 @@ function setDatosFactura(){
     datos.cce.cceNExpConfiable = $("#txt_cceNExpConfiable").val();
     datos.cce.cceCertOrig = $("#txt_cceCertOrig").val();
     datos.cce.cceNCertOrig = $("#txt_cceNCertOrig").val();
+    datos.cce.cceMTraslado = $("#selectCceMTraslado").val();
 
     // datos productos
     var rows = [];

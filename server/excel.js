@@ -2,7 +2,7 @@
 var excelInfo = {
     configRead: {
         colInitHead:  "A",
-        colEndHead: "Z",
+        colEndHead: "AG",
         rowHead: 1
     }
 }
@@ -230,11 +230,20 @@ var excel = {
 
 ///// funciones de proposito general ////
 function intToChar(i) {
-    return String.fromCharCode(i);
+    if (i < 26)
+        return String.fromCharCode( i + 65);
+    else {
+        var chart1 = parseInt(i / 26) + 64;
+        var chart2 = parseInt(i % 26) + 65;
+        return String.fromCharCode(chart1) + String.fromCharCode(chart2);
+    }
 }
 
-function charToInt(c){
-    return c.charCodeAt(0);
+function charToInt(c) {
+    if (c.length == 1)
+        return c.charCodeAt(0) - 65;
+    else if (c.length == 2)
+        return (26 * (c.charCodeAt(0) - 64)) + (c.charCodeAt(1) - 65);
 }
 
 var normalize = (function() {

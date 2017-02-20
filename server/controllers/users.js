@@ -8,6 +8,8 @@ const models = require('../models');
 const services = require('../services');
 
 function createUser(req, res) {
+    if (req.rolUser != "admin")
+        return res.status(401).send({message: "usuario no autorizado"});
 
     var user = {
         name: req.body.name,
@@ -29,7 +31,7 @@ function login(req, res) {
     var user = req.body.userName;
 
     models.User.findOne({
-        attributes: ['name', 'userName', 'area'],
+        attributes: ['name', 'userName', 'area', 'rolUser'],
         where: { userName: user, password: pass }
     })
     .then(function(user) {
@@ -43,14 +45,20 @@ function login(req, res) {
     });
 }
 
-function obtainUsers(req, res){
+function obtainUsers(req, res) {
+    if (req.rolUser != "admin")
+        return res.status(401).send({message: "usuario no autorizado"});
+
     models.User.findAll({attributes:["id","name","userName","area","rolUser"]}).then(function(users) {
         return res.status(200).send(users);
     });
 }
 
 function getInfoUsers(req, res){
-    var id = req.body.id;
+    if (req.rolUser != "admin")
+        return res.status(401).send({message: "usuario no autorizado"});
+
+    var id = req.params.id;
     models.User.findOne({
         attributes: ['name', 'userName', 'area', 'password', 'rolUser'],
         where: {id: id}
@@ -89,6 +97,7 @@ function updateUsers(req, res){
     })
 }
 
+
 function deleteUser(req, res){
     if (req.rolUser != "admin")
         return res.status(401).send({message: "usuario no autorizado"});
@@ -102,6 +111,7 @@ function deleteUser(req, res){
         return res.status(505).send(err);
     });
 }
+
 
 module.exports = {
     createUser,

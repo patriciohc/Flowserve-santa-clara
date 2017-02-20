@@ -17,13 +17,16 @@ const dirFacturasTimbradas = "./timbradas";
 var io; // websockets
 var watch;
 
-// carga informacion del excel en formato json
-var jsonExcel = (function(){
+function cargaDeExcel() {
+    if (!fs.existsSync("./info_excel/Copy_of_BACKLOG-EPO_002.xlsx"))
+        return null;
     var workbook = XLSX.readFile("./info_excel/Copy_of_BACKLOG-EPO_002.xlsx");
     //return excel.readExcel(workbook);
     var sheets = excel.readExcel(workbook);
     return sheets[0];
-})();
+}
+// carga informacion del excel en formato json
+var jsonExcel = cargaDeExcel();
 
 // determina si un txt tiene A1 en su nombre
 function Isprocessed(fileName) {
@@ -134,7 +137,7 @@ function procesarTxt(nameTxt, dir) {
                 fs.unlinkSync(dirFacturas + "/" + nameTxt);
             }
             console.log("termino -> " + nameTxt);
-            resolv("success");
+            resolv(nombreExtranjeras);
         });
     }
 }
@@ -370,6 +373,10 @@ function convertProductosJsonToTxt(productos) {
 function complementarInfoPrducto(producto, head) {
 
     var codigo = producto.VlrCodigo
+    if (!jsonExcel){
+        console.log("no se encotraron los datos del excel");
+        return;
+    }
 
     var infoExcel = jsonExcel.data.find(elemento => elemento.ODV_Num.trim() == codigo.trim())
     || { DESCRIPCION_EN_ESPAnOL: "", DESCRIPCION_EN_INGLES: "", FRACCION: "" };
@@ -383,8 +390,8 @@ function complementarInfoPrducto(producto, head) {
         } else if (!tmp) {
             head.push({ nombre: key, posicion: head[head.length - 1].posicion + 100 });
         }
-        if (!producto.hasOwnProperty(key))
-            producto[key] = infoExcel[match[key]];
+        //if (!producto.hasOwnProperty(key))
+        producto[key] = infoExcel[match[key]];
     }
 
     var checkItemVacio = function(key) {
@@ -440,7 +447,7 @@ function testNameTxt(nameTxt) {
 */
 function getFacturas(req, res) {
     console.log("getFacturas");
-    var itemXPage = parseInt(req.query.imteXPage);
+    var itemXPage = parseInt(req.query.itemXPage);
     var page = parseInt(req.query.page);
     if (isNaN(itemXPage) || isNaN(page))
         return res.status(404).send({message: "datos no validos"});
@@ -455,7 +462,6 @@ function getFacturas(req, res) {
 
     var list = fs.readdirSync(dir);
     var listStat = [];
-    console.log(list);
     for (var i = 0; i < list.length; i++) {
         if (!testNameTxt(list[i])) continue;
         var stat = fs.statSync(dir + "/" + list[i]);
@@ -488,11 +494,15 @@ function getFacturas(req, res) {
     res.status(200).send(facturas);
 }
 /**
-* regresa las facturas en el txt
+* reprocesa las facturas en el txt
 */
 function reProcesarTxt(req, res) {
     console.log("reProcesarTxt");
     jsonExcel = cargaDeExcel();
+    if (!jsonExcel) {
+        console.log("no se encotraron los datos del excel");
+        return res.status(404).send({message: "no se encontraron datos en el excel"});
+    }
     if (watch) {
         watch.close();
         watch = null;
@@ -548,12 +558,10 @@ function timbrar(req, res) {
 */
 function reEditar(req, res) {
     var nameTxts = req.body.nameTxts;
-    console.log("reEditar: ");
-    console.log(nameTxts);
+    console.log("reEditar ");
     for (var i = 0; i < nameTxts.length; i++) {
         var nameTxt = dirFacturasTimbradas + "/" + nameTxts[i]
         if(fs.existsSync(nameTxt)){
-            console.log("nameTxt -> " + nameTxt);
             fs.renameSync(nameTxt, dirFacturas + "/" + nameTxts[i]);
             var factura = convertTxtToJson(dirFacturas + "/" + nameTxts[i]);
             io.emit('newTxt', {nameTxt: nameTxts[i], factura});

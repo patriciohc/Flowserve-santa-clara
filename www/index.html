@@ -2,9 +2,7 @@
 <html >
 <head>
     <meta charset="UTF-8">
-    <title>login form</title>
-    <meta charset="UTF-8">
-    <title>login form</title>
+    <title>Flowserve</title>
 
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/reset.min.css">
@@ -55,7 +53,7 @@
                     <a class="navbar-brand" href="https://www.flowserve.com/">Flowserve</a>
                 </div>
                 <ul class="nav navbar-nav navbar-right">
-                    <li><a data-toggle="modal" onclick="onClickHistorial()" data-target="#myModalHistorial" href="#"><span class="glyphicon glyphicon-folder-close"></span> Historial</a></li>
+                    <li><a data-toggle="modal" onclick="updateTablaTxtHistorial()" data-target="#myModalHistorial" href="#"><span class="glyphicon glyphicon-folder-close"></span> Historial</a></li>
                     <li><a id="idbtnReguser" data-toggle="modal" data-target="#myModal" href="#"><span class="glyphicon glyphicon-user"></span> Registro</a></li>
                     <li><a id="idbtnSalir" href="#"><span class="glyphicon glyphicon-log-in"></span> Salir</a></li>
                     <li><a href="#" id="labelUser" style="color:white;"></a></li>
@@ -85,19 +83,23 @@
                                     <option value="50">50</option>
                                 </select>
                                 <span>
-                                    Paginá actual
-                                    <strong id="labelNoPage">1</strong>
+                                    <strong>&nbsp&nbsp Paginá actual</strong>
+                                    <strong id="labelNoPage">1</strong>&nbsp
                                 </span>
                                 <div class="btn-group">
-                                    <button type="button" onclick="btnAtrasFactura()" class="btn btn-primary" >
+                                    <button type="button" onclick="btnAtrasFactura()" class="btn btn-sm btn-primary" >
                                         <span class="glyphicon glyphicon-arrow-left"></span>
 
                                     </button>
-                                    <button type="button" onclick="btnAdelanteFactura()" class="btn btn-primary">
+                                    <button type="button" onclick="btnAdelanteFactura()" class="btn btn-sm btn-primary">
 
                                         <span class="glyphicon glyphicon-arrow-right"></span>
                                     </button>
                                 </div>
+                                <button class="btn btn-success btn-xs pull-right" onclick="actualiarFacturas()">
+                                    <span class="glyphicon glyphicon-refresh"></span>
+                                    Actualizar
+                                </button>
                             </div>
                             <div id="divTablaFacturas" style="overflow: scroll;">
                                 <table class="table table-hover table-bordered">
@@ -381,65 +383,65 @@
             </div>
         </div>
 
-<!-- Modal Registro -->
-<div class="modal fade" id="myModal" role="dialog">
-    <div class="modal-dialog">
-        <!-- Modal content-->
-        <div class="modal-content">
-            <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal">&times;</button>
-                <h4 class="modal-title">Registro Usuario</h4>
-            </div>
-            <div class="modal-body">
-                <form>
-                    <div class="form-group">
-                        <label for="inputsm">Usuarios existentes:</label><br>
-                        <select id="idselectUsers" class="form-control show-tick" data-style="btn-info">
-                        </select>
+        <!-- Modal Registro -->
+        <div class="modal fade" id="myModal" role="dialog">
+            <div class="modal-dialog">
+                <!-- Modal content-->
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                        <h4 class="modal-title">Registro Usuario</h4>
                     </div>
-                    <div class="form-group">
-                        <label for="inputlg">Nombre Completo:</label>
-                        <input class="form-control ctrl-valVaci" id="inputlg" placeholder="Nombre Completo" type="text" required>
+                    <div class="modal-body">
+                        <form>
+                            <div class="form-group">
+                                <label for="inputsm">Usuarios existentes:</label><br>
+                                <select id="idselectUsers" class="form-control show-tick" data-style="btn-info">
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="inputlg">Nombre Completo:</label>
+                                <input class="form-control ctrl-valVaci" id="inputlg" placeholder="Nombre Completo" type="text" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="inputdefault">Usuario:</label>
+                                <input class="form-control ctrl-valVaci" id="inputdefault" placeholder="Usuario" type="text" required>
+                            </div>
+                            <div id="contentDivsNewpsw">
+                                <div class="form-group">
+                                    <label for="pwd">Contraseña:</label>
+                                    <input type="password" class="form-control ctrl-valVaci" id="pwdnew1" placeholder="Nueva contraseña" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="pwd">Confirma contraseña:</label>
+                                    <input type="password" class="form-control ctrl-valVaci" id="pwdnew2" placeholder="Confirma contraseña" required>
+                                </div>
+                            </div>
+                            <div id="passChange" class="form-group" style="display:none">
+                                <label for="pwd">Contraseña:</label> <input id="switchPasschange" type="checkbox" data-onstyle="success" data-toggle="toggle" data-on="SI" data-off="NO" data-size="mini">
+                                <input type="password" class="form-control" id="pwd" placeholder="Contraseña" disabled>
+                            </div>
+                            <div class="form-group">
+                                <label for="inputsm">Area:</label>
+                                <input class="form-control input-sm ctrl-valVaci" id="inputsm" placeholder="Area" type="text" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="inputsm">Rol de Usuario:</label><br>
+                                <select id="selectRol"  class="selectpicker" data-style="btn-info">
+                                    <option value="user">Usuario</option>
+                                    <option value="admin">Administrador</option>
+                                </select>
+                            </div>
+                        </form>
                     </div>
-                    <div class="form-group">
-                        <label for="inputdefault">Usuario:</label>
-                        <input class="form-control ctrl-valVaci" id="inputdefault" placeholder="Usuario" type="text" required>
+                    <div class="modal-footer">
+                        <button id="idbtnAddUser" type="button" class="btn btn-danger btn-sm" style=""><span class="glyphicon glyphicon-saved" aria-hidden="true"></span> Agregar</button>
+                        <button id="idbtnUpdateuser" type="button" class="btn btn-danger btn-sm" style="display:none;"><span class="glyphicon glyphicon-refresh" aria-hidden="true"></span> Actualizar</button>
+                        <button id="btnDeletuser" type="button" class="btn btn-danger btn-sm" disabled style="display:none;"><span class="glyphicon glyphicon-trash" aria-hidden="true"></span> Eliminar</button>
                     </div>
-                    <div id="contentDivsNewpsw">
-                        <div class="form-group">
-                            <label for="pwd">Contraseña:</label>
-                            <input type="password" class="form-control ctrl-valVaci" id="pwdnew1" placeholder="Nueva contraseña" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="pwd">Confirma contraseña:</label>
-                            <input type="password" class="form-control ctrl-valVaci" id="pwdnew2" placeholder="Confirma contraseña" required>
-                        </div>
-                    </div>
-                    <div id="passChange" class="form-group" style="display:none">
-                        <label for="pwd">Contraseña:</label> <input id="switchPasschange" type="checkbox" data-onstyle="success" data-toggle="toggle" data-on="SI" data-off="NO" data-size="mini">
-                        <input type="password" class="form-control" id="pwd" placeholder="Contraseña" disabled>
-                    </div>
-                    <div class="form-group">
-                        <label for="inputsm">Area:</label>
-                        <input class="form-control input-sm ctrl-valVaci" id="inputsm" placeholder="Area" type="text" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="inputsm">Rol de Usuario:</label><br>
-                        <select id="selectRol"  class="selectpicker" data-style="btn-info">
-                            <option value="user">Usuario</option>
-                            <option value="admin">Administrador</option>
-                        </select>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button id="idbtnAddUser" type="button" class="btn btn-danger btn-sm" style=""><span class="glyphicon glyphicon-saved" aria-hidden="true"></span> Agregar</button>
-                <button id="idbtnUpdateuser" type="button" class="btn btn-danger btn-sm" style="display:none;"><span class="glyphicon glyphicon-refresh" aria-hidden="true"></span> Actualizar</button>
-                <button id="btnDeletuser" type="button" class="btn btn-danger btn-sm" disabled style="display:none;"><span class="glyphicon glyphicon-trash" aria-hidden="true"></span> Eliminar</button>
+                </div>
             </div>
         </div>
-    </div>
-</div>
 
 <!-- Modal Historial-->
 <div id="myModalHistorial" class="modal fade" role="dialog">
@@ -453,13 +455,27 @@
             </div>
             <div class="modal-body">
                 <!-- <h5 class="modal-title">Seleccione un rango de fechas, seleccione los archivo a recuperar y de click en restaurar.</h5> -->
-                <div class="form-inline">
-                    <label for="from">Desde:</label>
-                    <input type="text" id="from" class="form-control" name="from" />
-                    <label for="to">Hasta:</label>
-                    <input type="text" id="to" class="form-control" name="to" />
+                <label for="selectElementosXPageHistorial">Elementos por paginá</label>
+                <select  id="selectElementosXPageHistorial" onchange="updateTablaTxtHistorial()">
+                    <option value="5">5</option>
+                    <option value="10">20</option>
+                    <option value="30">30</option>
+                    <option value="40">40</option>
+                    <option value="50">50</option>
+                </select>
+                <span>
+                    Paginá actual
+                    <strong id="labelNoPageHistorial">1</strong>
+                </span>
+                <div class="btn-group">
+                    <button type="button" onclick="btnAtrasFacturaHistorial()" class="btn btn-xs btn-primary" >
+                        <span class="glyphicon glyphicon-arrow-left"></span>
+                    </button>
+                    <button type="button" onclick="btnAdelanteFacturaHistorial()" class="btn btn-xs btn-primary">
+                        <span class="glyphicon glyphicon-arrow-right"></span>
+                    </button>
                 </div>
-                <br>
+                <br><br>
                 <div class="row" style="max-height:350px; overflow:scroll;">
                     <table id="tablaHistorial" class="table table-striped table-bordered table-hover">
                         <thead>

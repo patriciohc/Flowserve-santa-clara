@@ -7,7 +7,7 @@ const middleware = require('./middleware');
 const facturas = require('./controllers/facturas');
 // middleware.ensureAuthenticated,
 // txt
-api.get('/facturas/', facturas.getFacturas);
+api.get('/facturas/', middleware.ensureAuthenticated, facturas.getFacturas);
 //api.get('/testDB/',facturas.testDB);
 //api.post('/facturas/', facturas.getFacturas);
 api.put('/facturas/', middleware.ensureAuthenticated, facturas.guardarTxt);

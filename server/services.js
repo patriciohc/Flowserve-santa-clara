@@ -5,7 +5,7 @@ var config = require('./config');
 
 exports.createToken = function(user) {
   var payload = {
-    sub: user.id,
+    sub: user.rolUser,
     iat: moment().unix(),
     exp: moment().add(14, "days").unix(),
   };

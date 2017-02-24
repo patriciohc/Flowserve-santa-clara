@@ -27,7 +27,6 @@ function cargaDeExcel() {
 }
 // carga informacion del excel en formato json
 var jsonExcel = cargaDeExcel();
-console.log(jsonExcel);
 // determina si un txt tiene A1 en su nombre
 function Isprocessed(fileName) {
     var isProsesada = fileName.split("_");
@@ -447,7 +446,8 @@ function complementarInfoExcelPrducto(producto/*, head*/) {
     }
     console.log(codigo);
     var infoExcel = jsonExcel.data.find(elemento => elemento.ODV_Num.trim() == codigo.trim())
-    || { DESCRIPCION_EN_ESPAnOL: "", DESCRIPCION_EN_INGLES: "", FRACCION: "" };
+    console.log(infoExcel);
+    var infoExcel = infoExcel || { Descripcion_Espanol: "", FRACCION_ARANCELARIA: "" , Marca: "Marca"};
     var match = {cceDescEsp: "Descripcion_Espanol", FraccionArancelaria: "FRACCION_ARANCELARIA", Marca: "Marca", Modelo: "Modelo", NumeroSerie:"No__Serie"};
     var comentarios;
     var checkItemExcel = function(key) {

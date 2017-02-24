@@ -27,6 +27,7 @@ function cargaDeExcel() {
 }
 // carga informacion del excel en formato json
 var jsonExcel = cargaDeExcel();
+console.log(jsonExcel);
 // determina si un txt tiene A1 en su nombre
 function Isprocessed(fileName) {
     var isProsesada = fileName.split("_");
@@ -152,7 +153,7 @@ function addInfoFactura(factura) {
     if (!factura.XXXINICIO.Detalle) {
         return new Promise((resolv, reject) => resolv("formato no valido"));
     }
-    complementarInfoPrductos(factura.XXXINICIO.Detalle);
+    complementarInfoPrductos(factura.XXXINICIO.Detalle, factura.XXXFINDETA.ComercioExterior.Detalle);
     //return Promise.all(promises);
 }
 /**
@@ -169,12 +170,16 @@ function convertTxtToJson(nameFile) {
                 var item = elementos[i].trim();
                 if (item == "") continue;
                 var key = item.split(" ")[0];
+                if (key == "======================ComercioExterior"){
+                    return procesarComercioExterior(elementos);
+                    //continue;
+                }
                 var value = item.substring(key.length, item.length).trim();
                 if (value == "Detalle") {
                     i++;
                     var infoHead = procesarHead(elementos[i].trim());
                     var rows = [];
-                    while(++i < elementos.length)
+                    while(++i < elementos.length  && elementos[i] != "xxxxxxxxxxxxxxxxxxxxxxxxxFinDetalleMercancias")
                         rows.push(procesarRow(elementos[i], infoHead));
                     dic.Detalle =  { head: infoHead, rows: rows } ;
                 } else {
@@ -185,15 +190,16 @@ function convertTxtToJson(nameFile) {
         });
 
         var seccionProcesada = {};
+        //console.log(bloques);
         for (var i in bloques) {
             var bloque = bloques[i];
             var seccion = bloque["================"];
             if (seccion) {
                 seccionProcesada[seccion] = bloque;
-            } else {
-                if (bloque.Detalle) {
-                    seccionProcesada.Detalle = bloque.Detalle;
-                }
+            } else if (bloque.Detalle && typeof(bloque["======================ComercioExterior"]) == 'undefined') {
+                seccionProcesada.Detalle = bloque.Detalle;
+            } else if (typeof(bloque["======================ComercioExterior"]) != 'undefined' ) {
+                seccionProcesada.ComercioExterior = bloque;
             }
         }
         return seccionProcesada;
@@ -220,24 +226,67 @@ function convertTxtToJson(nameFile) {
     }
     return factura;
 }
+
+function procesarComercioExterior(elementos) {
+    var dic = {};
+    for (var i = 0; i < elementos.length; i++) {
+        var item = elementos[i].trim();
+        if (item == "") continue;
+        var key = item.split(" ")[0];
+        var value = item.substring(key.length, item.length).trim();
+        if (key == "xxxxxxxxxxxxxxxxxxxxxxxxxDetalleMercancias") {
+            dic[key] = "";
+            i++;
+            var infoHead = procesarHead(elementos[i].trim());
+            var rows = [];
+            while(++i < elementos.length  && elementos[i] != "xxxxxxxxxxxxxxxxxxxxxxxxxFinDetalleMercancias")
+                rows.push(procesarRow(elementos[i], infoHead));
+            dic.Detalle =  { head: infoHead, rows: rows } ;
+        } else {
+            dic[key] = value;
+        }
+    }
+    return dic;
+}
 /**
 * agrega las claves para la informacion que se agregara manualmente
 * @param {json} factura - factura
 */
-function addSeccionManual(factura){
+function addSeccionManual(factura) {
+    var tipoCambio = factura.XXXFINDETA.Totales.FctConv;
+    var icoterm = factura.XXXFINDETA.Personalizados.TermsEmb;
     var nuevosDatos = {
-        "================" : "cce",
-        cceNExpConfiable: "",
-        cceCertOrig: "",
-        cceNCertOrig: "",
-        cceVersion: "1.1",
-        cceTipoOp: "Exportacion",
-        cceClavePed: "A1",
-        cceMTraslado: "",
+        "======================ComercioExterior": "",
+        Version: "1.1",
+        TipoOperacion: "2",
+        ClavePedimento: "A1",
+        CertificadoOrigen: "",
+        NumCertificadoOrigen: "",
+        NoExportadorConfiabl: "",
+        TipoCambio: tipoCambio,
+        Incoterm: icoterm,
+        "xxxxxxxxxxxxxxxxxxxxxxxxxDetalleMercancias": "",
+        Detalle: {
+            head:[
+                {nombre: "NoIdentificacion", posicion: 0},
+                {nombre: "FraccionArancelaria", posicion: 30},
+                {nombre: "ValorDolares", posicion: 60},
+                {nombre: "Marca", posicion: 100},
+                {nombre: "Modelo", posicion: 150},
+                {nombre: "NumeroSerie", posicion: 200},
+                {nombre: "cceDescEsp", posicion: 250},
+                {nombre: "cceDescIng", posicion: 300},
+            ]
+            //rows: [],
+        }
     }
     // busca si ya fueron agregados los nuevos datos
-    if (!factura.XXXINICIO.cce)
-        factura.XXXINICIO.cce = nuevosDatos;
+    if (!factura.XXXFINDETA.ComercioExterior) {
+        var tmp = JSON.stringify(factura.XXXFINDETA.Referencia);
+        delete factura.XXXFINDETA.Referencia;
+        factura.XXXFINDETA.ComercioExterior = nuevosDatos;
+        factura.XXXFINDETA.Referencia = JSON.parse(tmp);
+    }
 }
 /**
 * dentro de cada factura hay un aparatado donde se encuetran los productos con
@@ -319,6 +368,9 @@ function writeFile(factura, nombreTxt, directorio) {
                         + "Detalle" + "\r\n";
                     texto += convertProductosJsonToTxt(subSeccion) + "\r\n";
                     break;
+                case "ComercioExterior":
+                    texto += convertComercioExteriorToTxt(subSeccion);
+                    break;
                 default:
                     texto += seccionToTxt(subSeccion);
             }
@@ -333,6 +385,22 @@ function writeFile(factura, nombreTxt, directorio) {
 
     texto = iconvlite.encode(texto, ' ISO-8859-1');
     fs.writeFileSync(directorio + "/" + nombreTxt, texto);
+}
+
+function convertComercioExteriorToTxt(seccion) {
+    var white = "                                    ";
+    var texto = "======================ComercioExterior\r\n"
+    var keys = Object.keys(seccion);
+    for (var i = 1; i < keys.length-1; i++) {
+        var keyItemSeccion = keys[i];
+        texto += keyItemSeccion
+            + white.substring(0, 31 - keyItemSeccion.length)
+            + seccion[keyItemSeccion] + "\r\n";
+    }
+    //texto += "xxxxxxxxxxxxxxxxxxxxxxxxxDetalleMercancias\r\n";
+    texto += convertProductosJsonToTxt(seccion.Detalle);
+    texto += "xxxxxxxxxxxxxxxxxxxxxxxxxFinDetalleMercancias\r\n\r\n";
+    return texto;
 }
 /**
 * convierte lo productos que se encuentran en formato json a texto para ser escritos
@@ -370,26 +438,26 @@ function convertProductosJsonToTxt(productos) {
 * @param {json} producto - producto
 * @param {json} head - descripcion de las columnas
 */
-function complementarInfoPrducto(producto, head) {
+function complementarInfoExcelPrducto(producto/*, head*/) {
 
-    var codigo = producto.VlrCodigo
-    if (!jsonExcel){
+    var codigo = producto.NoIdentificacion;
+    if (!jsonExcel) {
         console.log("no se encotraron los datos del excel");
         return;
     }
-
+    console.log(codigo);
     var infoExcel = jsonExcel.data.find(elemento => elemento.ODV_Num.trim() == codigo.trim())
     || { DESCRIPCION_EN_ESPAnOL: "", DESCRIPCION_EN_INGLES: "", FRACCION: "" };
-    var match = {cceDescES: "Descripcion_Espanol", cceFraccion: "FRACCION_ARANCELARIA", cceMarca: "Marca", cceModelo: "Modelo", cceSerie:"No__Serie"};
+    var match = {cceDescEsp: "Descripcion_Espanol", FraccionArancelaria: "FRACCION_ARANCELARIA", Marca: "Marca", Modelo: "Modelo", NumeroSerie:"No__Serie"};
     var comentarios;
-    var checkItemExcel = function(key, esPirmero) {
-        var tmp = head.find( item => item.nombre == key );
-        if (!tmp && esPirmero) {
-            comentarios = head.pop();
-            head.push({ nombre: key, posicion: head[head.length - 1].posicion + 60 });
-        } else if (!tmp) {
-            head.push({ nombre: key, posicion: head[head.length - 1].posicion + 100 });
-        }
+    var checkItemExcel = function(key) {
+        // var tmp = head.find( item => item.nombre == key );
+        // if (!tmp && esPirmero) {
+        //     comentarios = head.pop();
+        //     head.push({ nombre: key, posicion: head[head.length - 1].posicion + 60 });
+        // } else if (!tmp) {
+        //     head.push({ nombre: key, posicion: head[head.length - 1].posicion + 100 });
+        // }
         //if (!producto.hasOwnProperty(key))
         producto[key] = infoExcel[match[key]];
     }
@@ -403,15 +471,15 @@ function complementarInfoPrducto(producto, head) {
             producto[key] = ""
     }
     // datos excel
-    checkItemExcel("cceDescES", true);// descripcion español
+    checkItemExcel("cceDescEsp");// descripcion español
     //checkItemExcel("cceDescEN");// descripcion ingles
-    checkItemExcel("cceFraccion");// fraccion
-    checkItemExcel("cceMarca");
-    checkItemExcel("cceModelo");
-    checkItemExcel("cceSerie");
+    checkItemExcel("FraccionArancelaria");// fraccion
+    checkItemExcel("Marca");
+    checkItemExcel("Modelo");
+    checkItemExcel("NumeroSerie");
 
-    if (comentarios)
-        head.push({ nombre: comentarios.nombre, posicion: head[head.length - 1].posicion + 50 });
+    //if (comentarios)
+    //    head.push({ nombre: comentarios.nombre, posicion: head[head.length - 1].posicion + 50 });
 }
 /**
 * complementa la informacion para los productos recibidos
@@ -419,10 +487,23 @@ function complementarInfoPrducto(producto, head) {
 * @param {Array} arrayPromises - debido a que se ejecutan consultas sqlServer
 * asincronas, es necesario para determinar el momento en que se han ejecutado todas
 */
-function complementarInfoPrductos(productos){
+function complementarInfoPrductos(productos, nuevaSeccionProductos){
+    nuevaSeccionProductos.rows = [];
     for (var i in productos.rows) {
-        var p = productos.rows[i];
-        complementarInfoPrducto(p, productos.head);
+        var newRow = {
+            NoIdentificacion: productos.rows[i].VlrCodigo,
+            FraccionArancelaria: "",
+            ValorDolares: productos.rows[i].MontoNetoItem,
+            Marca: "",
+            Modelo: "",
+            NumeroSerie: "",
+            cceDescEsp: "",
+            cceDescIng: "",
+        }
+        nuevaSeccionProductos.rows.push(newRow);
+        var p = nuevaSeccionProductos.rows[i];
+        //var p = productos.rows[i];
+        complementarInfoExcelPrducto(p/*, nuevaSeccionProductos.head*/);
         //var promise = EIS.getDatos(p.VlrCodigo1).then(function(datos){
         //    p.cceMarca = datos.marca;
         //    p.cceModelo = datos.modelo;
